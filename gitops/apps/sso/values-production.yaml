@@ -1,0 +1,66 @@
+application:
+  applicationName: ladesa-ro-sso
+  deployment:
+    containerSecurityContext:
+      readOnlyRootFilesystem: false
+      runAsNonRoot: false
+    enabled: true
+    envFrom:
+      sso-config:
+        name: ladesa-ro-sso-config
+        type: secret
+    image:
+      pullPolicy: Always
+      repository: ghcr.io/ladesa-ro/autenticacao
+      tag: sso-service-production
+    livenessProbe:
+      failureThreshold: 20
+      initialDelaySeconds: 30
+      path: /health/live
+      periodSeconds: 10
+      port: 9000
+      timeoutSeconds: 1
+    ports:
+    - containerPort: 8080
+      name: web
+    readinessProbe:
+      failureThreshold: 20
+      initialDelaySeconds: 30
+      path: /health/ready
+      periodSeconds: 10
+      port: 9000
+      timeoutSeconds: 1
+    replicas: 1
+    resources:
+      limits:
+        cpu: '2'
+        memory: 2Gi
+      requests:
+        cpu: '0.5'
+        memory: 1Gi
+    startupProbe:
+      failureThreshold: 20
+      initialDelaySeconds: 30
+      path: /health/started
+      periodSeconds: 10
+      port: 9000
+      timeoutSeconds: 1
+    strategy:
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+  ingress:
+    enabled: true
+    hosts:
+    - host: sso.ladesa.com.br
+      paths:
+      - path: /
+        pathType: ImplementationSpecific
+        servicePort: web
+  service:
+    enabled: true
+    ports:
+    - name: ladesa-ro-sso
+      port: 80
+      targetPort: web
+    type: NodePort

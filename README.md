@@ -91,3 +91,28 @@ down:
 logs:
   # Mostra os registros dos containers
 ```
+
+## Implantação (GitOps)
+
+A implantação em produção é declarada em `gitops/` e reconciliada pelo [Argo CD](https://github.com/ladesa-ro/infrastructure), não por comando imperativo no fim do build.
+
+```
+gitops/
+  envs/production/applications/sso.yaml   Application observada pelo Argo CD
+  apps/sso/                               chart Helm local deste serviço
+    Chart.yaml                            declara stakater/application como dependência
+    charts/                               a dependência vendorizada, para o build não depender da rede
+    values-production.yaml                a configuração de produção
+```
+
+São duas camadas de propósito. `envs/` diz **o que** o Argo CD deve observar e com que política de sincronização. `apps/` diz **como** o serviço é montado. Trocar a configuração de produção é editar `values-production.yaml` e abrir um pull request, com revisão e histórico, em vez de mudar uma variável de ambiente pela interface do GitHub.
+
+O repositório `infrastructure` mantém uma `Application` raiz apontando para `gitops/envs/production/applications`, que é o que faz o Argo CD descobrir o que está aqui. A fronteira é essa: a plataforma decide que este repositório é observado, e este repositório decide o que roda.
+
+### Segredos
+
+Nenhum segredo vive aqui. O `Deployment` consome o Secret `ladesa-ro-sso-config` por `envFrom`, e esse Secret é produzido por um `InfisicalSecret` a partir do [Infisical](https://infisical.ladesa.com.br) self-hosted. Trocar uma senha é trocar no Infisical, não neste repositório.
+
+### Por que não há comentário nos arquivos de `gitops/`
+
+O ecossistema Ladesa não permite comentário em arquivo de código, e o motivo é que comentário envelhece sem que ninguém perceba. O contexto que explicaria cada bloco fica aqui e na documentação de arquitetura do `infrastructure`, onde a revisão alcança.
