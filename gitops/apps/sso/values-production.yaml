@@ -56,7 +56,7 @@ application:
       paths:
       - path: /
         pathType: ImplementationSpecific
-        servicePort: web
+        servicePort: ladesa-ro-sso
   service:
     enabled: true
     ports:
