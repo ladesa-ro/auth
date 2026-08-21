@@ -10,7 +10,7 @@ spec:
   project: ladesa-satellites
   source:
     repoURL: https://github.com/ladesa-ro/authentication-service.git
-    targetRevision: production
+    targetRevision: main
     path: gitops/apps/sso
     helm:
       releaseName: ladesa-ro-sso
