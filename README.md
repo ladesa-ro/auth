@@ -109,6 +109,23 @@ São duas camadas de propósito. `envs/` diz **o que** o Argo CD deve observar e
 
 O repositório `infrastructure` mantém uma `Application` raiz apontando para `gitops/envs/production/applications`, que é o que faz o Argo CD descobrir o que está aqui. A fronteira é essa: a plataforma decide que este repositório é observado, e este repositório decide o que roda.
 
+### Promoção de versão
+
+A imagem é construída uma vez, no push pra `main`, e publicada no registro. Implantar é uma operação separada: o workflow **Promote**, disparado à mão, recebe o digest da imagem e o escreve em `gitops/apps/sso/values-<ambiente>.yaml`. O Argo CD reconcilia a partir do commit.
+
+```
+build-push.yml            promote.yml                     Argo CD
+  constroi e publica  ->    recebe o digest           ->    reconcilia
+                            escreve no values
+                            commita
+```
+
+A promoção usa digest e não tag, porque digest é imutável: o que foi aprovado é exatamente o que vai pro ar, e a mesma versão pode ser promovida de novo sem ambiguidade. O workflow recusa qualquer coisa que não seja `sha256:` seguido de 64 caracteres, e confere no registro que aquele digest existe antes de commitar.
+
+O passo de promoção declara `environment`, então o GitHub aplica as regras daquele ambiente, registra quem promoveu e quando, e permite exigir aprovação antes de a promoção acontecer. Aprovar dias depois do build é o comportamento esperado, não uma exceção.
+
+Como quem implanta é o Argo CD e não o workflow, nenhuma credencial de cluster existe no CI, e desfazer uma promoção é reverter o commit.
+
 ### Segredos
 
 Nenhum segredo vive aqui. O `Deployment` consome o Secret `ladesa-ro-sso-config` por `envFrom`, e esse Secret é produzido por um `InfisicalSecret` a partir do [Infisical](https://infisical.ladesa.com.br) self-hosted. Trocar uma senha é trocar no Infisical, não neste repositório.

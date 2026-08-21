@@ -3,8 +3,8 @@ name: "Promote"
 on:
   workflow_dispatch:
     inputs:
-      versao:
-        description: "Tag ou digest da imagem a promover, por exemplo sso-service-production ou sha256:abc..."
+      digest:
+        description: "Digest da imagem a promover, no formato sha256:..."
         required: true
         type: string
       ambiente:
@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   promover:
-    name: "Promover ${{ inputs.versao }} para ${{ inputs.ambiente }}"
+    name: "Promover para ${{ inputs.ambiente }}"
     runs-on: ubuntu-latest
 
     environment:
@@ -40,6 +40,14 @@ jobs:
           ref: main
           persist-credentials: true
 
+      - name: "Conferir o formato do digest"
+        run: |
+          set -euo pipefail
+          if ! [[ "${{ inputs.digest }}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::digest invalido, esperado sha256 seguido de 64 caracteres hexadecimais"
+            exit 1
+          fi
+
       - name: "Autenticar no registro"
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
         with:
@@ -47,54 +55,46 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Resolver a versão para um digest imutável"
-        id: digest
+      - name: "Conferir que o digest existe no registro"
         run: |
           set -euo pipefail
-          imagem="ghcr.io/${{ github.repository }}"
-          entrada="${{ inputs.versao }}"
-          if [[ "$entrada" == sha256:* ]]; then
-            referencia="${imagem}@${entrada}"
-          else
-            referencia="${imagem}:${entrada}"
-          fi
-          digest=$(docker buildx imagetools inspect "$referencia" --format '{{ .Manifest.Digest }}')
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          echo "referencia=$referencia" >> "$GITHUB_OUTPUT"
-          echo "$referencia resolve para $digest"
+          arquivo="gitops/apps/sso/values-${{ inputs.ambiente }}.yaml"
+          repositorio=$(python3 -c "import yaml,sys;print(yaml.safe_load(open(sys.argv[1]))['application']['deployment']['image']['repository'])" "$arquivo")
+          referencia="${repositorio}@${{ inputs.digest }}"
+          docker buildx imagetools inspect "$referencia" --format '{{ .Manifest.MediaType }}'
+          echo "::notice::$referencia existe no registro"
 
       - name: "Escrever o digest no manifesto do ambiente"
         id: escrita
         run: |
           set -euo pipefail
           arquivo="gitops/apps/sso/values-${{ inputs.ambiente }}.yaml"
-          python3 - "$arquivo" "${{ inputs.versao }}" "${{ steps.digest.outputs.digest }}" <<'PY'
+          python3 - "$arquivo" "${{ inputs.digest }}" <<'PY'
           import sys, yaml, pathlib
-          arquivo, versao, digest = sys.argv[1], sys.argv[2], sys.argv[3]
+          arquivo, digest = sys.argv[1], sys.argv[2]
           p = pathlib.Path(arquivo)
           d = yaml.safe_load(p.read_text())
           imagem = d["application"]["deployment"]["image"]
-          anterior = imagem.get("tag")
-          rotulo = versao.split("@")[0] if not versao.startswith("sha256:") else "promovido"
-          imagem["tag"] = f"{rotulo}@{digest}"
+          anterior = imagem.get("digest") or imagem.get("tag")
+          imagem.pop("tag", None)
+          imagem["digest"] = digest
           imagem["pullPolicy"] = "IfNotPresent"
           p.write_text(yaml.safe_dump(d, default_flow_style=False, sort_keys=True, allow_unicode=True, width=100))
-          print(f"::notice::tag anterior: {anterior}")
-          print(f"::notice::tag nova: {imagem['tag']}")
+          print(f"::notice::antes: {anterior}")
+          print(f"::notice::depois: {digest}")
           PY
           if git diff --quiet -- "$arquivo"; then
             echo "sem_mudanca=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::o ambiente já está nessa versão, nada a commitar"
           else
             echo "sem_mudanca=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: "Commitar a promoção"
+      - name: "Commitar a promocao"
         if: steps.escrita.outputs.sem_mudanca == 'false'
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add gitops/apps/sso/values-${{ inputs.ambiente }}.yaml
-          git commit -m "chore(gitops): promote ${{ inputs.versao }} to ${{ inputs.ambiente }}"
+          git add "gitops/apps/sso/values-${{ inputs.ambiente }}.yaml"
+          git commit -m "chore(gitops): promote ${{ inputs.digest }} to ${{ inputs.ambiente }}"
           git push origin HEAD:main
