@@ -1,4 +1,4 @@
-name: "Build, Push & Deploy"
+name: "Build & Push"
 
 on:
   workflow_dispatch:
@@ -41,23 +41,3 @@ jobs:
 
           push-image: "true"
           push-image-registry-url: ${{ vars.REGISTRY_GHCR == 'true' && 'ghcr.io' || secrets.REGISTRY_URL }}
-
-  cd:
-    name: Deploy to Cluster
-
-    runs-on: dev-deploy
-    needs: [ci]
-
-    environment:
-      name: production
-      url: ${{ vars.DEPLOY_URL }}
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: ladesa-ro/esteira-ci-cd/actions/deploy-k8s-stakater-application@main
-        with:
-          helm-values: ${{ vars.DEPLOY_HELM_VALUES }}
-          deployment: ${{ vars.K8S_DEPLOYMENT }}
-          namespace: ${{ vars.K8S_NAMESPACE }}
-          helm-release-name: ${{ vars.K8S_DEPLOYMENT }}
