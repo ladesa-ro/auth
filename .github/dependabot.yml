@@ -6,12 +6,6 @@ updates:
       interval: 'daily'
     open-pull-requests-limit: 10
 
-  - package-ecosystem: docker
-    directory: '/.devops'
-    schedule:
-      interval: 'daily'
-    open-pull-requests-limit: 10
-
   - package-ecosystem: github-actions
     directory: '/.github/workflows'
     schedule:
