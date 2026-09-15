@@ -26,7 +26,7 @@ RUN wget https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh -
 # ================================================================== #
 # Builder of theme jars                                              #
 # ================================================================== #
-FROM node:25 AS sso-theme-builder
+FROM node:26 AS sso-theme-builder
 
 RUN apt-get update && \
   apt-get install -y openjdk-17-jdk && \
